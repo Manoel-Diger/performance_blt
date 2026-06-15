@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance BLT — 2025 vs 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg2: #f8f9fa;
+    --bg3: #f1f3f5;
+    --text: #212529;
+    --text2: #495057;
+    --text3: #adb5bd;
+    --border: rgba(0,0,0,0.08);
+    --border2: rgba(0,0,0,0.15);
+    --green: #1d9e75;
+    --red: #e24b4a;
+    --amber: #ba7517;
+    --blue: #185fa5;
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1e;
+      --bg2: #242428;
+      --bg3: #141416;
+      --text: #f8f9fa;
+      --text2: #ced4da;
+      --text3: #6c757d;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.15);
+    }
+  }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    background: var(--bg3); 
+    color: var(--text); 
+    font-size: 14px; 
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1000px; margin: 24px auto; padding: 0 16px 48px; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+  .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .header-left h1 { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+  .header-left p { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg); color: var(--text); cursor: pointer; transition: background 0.2s; }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { opacity: 0.9; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+  .kpi-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .kpi-val { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 16px; border-left: 3px solid var(--text3); padding-left: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend .dash { width: 16px; border-top: 2px dashed var(--text3); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; font-weight: 600; color: var(--text2); border-bottom: 2px solid var(--border); background: var(--bg2); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tr:hover td { background: var(--bg2); }
+  .num { text-align: right; }
+  tfoot tr td { font-weight: 600; border-top: 2px solid var(--border2); border-bottom: none; background: var(--bg2); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-align: center; }
+  .badge-ok  { background: #eaf3de; color: #27500a; }
+  .badge-nok { background: #fcebeb; color: #791f1f; }
+  .badge-warn { background: #faeeda; color: #633806; }
+  @media (prefers-color-scheme: dark) {
+    .badge-ok  { background: #223e0d; color: #c0dd97; }
+    .badge-nok { background: #521515; color: #f7c1c1; }
+    .badge-warn { background: #442604; color: #fac775; }
+  }
+  .edit-panel { display: none; background: var(--bg); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px; border: 1px solid var(--blue); }
+  .edit-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 16px; }
+  .edit-sub { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
+  .edit-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .field input { font-size: 13px; padding: 6px 10px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--bg); color: var(--text); width: 100%; }
+  .field input:focus { outline: 2px solid var(--blue); }
+  .meta-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .meta-row label { font-size: 13px; font-weight: 500; color: var(--text2); }
+  .meta-row input { font-size: 13px; padding: 6px 10px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--bg); color: var(--text); width: 80px; }
+  .btn-row { display: flex; gap: 8px; }
+  .chart-wrap { position: relative; width: 100%; }
+  @media print {
+    body { background: white; color: black; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { max-width: 100%; margin: 0; padding: 0; }
+    .card { break-inside: avoid; border: 1px solid #dee2e6; box-shadow: none; margin-bottom: 20px; }
+    .btn, .edit-panel, #editBtn { display: none !important; }
+    th { background: #f8f9fa !important; color: #212529 !important; }
+    td { color: #212529 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="card">
+    <div class="header">
+      <div class="header-left">
+        <h1>Performance BLT — 2025 vs 2026</h1>
+        <p id="lastUpdate">—</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="editBtn" onclick="toggleEdit()">✏ Atualizar dados</button>
+        <button class="btn" onclick="window.print()">⎙ Imprimir / Salvar PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="edit-panel" id="editPanel">
+    <p class="section-title">Editar valores mensais</p>
+    <div class="edit-cols">
+      <div>
+        <p class="edit-sub">Performance 2025 (%)</p>
+        <div class="edit-inputs" id="inputs2025"></div>
+      </div>
+      <div>
+        <p class="edit-sub">Performance 2026 (%)</p>
+        <div class="edit-inputs" id="inputs2026"></div>
+      </div>
+    </div>
+    <div class="meta-row">
+      <label>Meta (%):</label>
+      <input id="inputMeta" type="number" step="0.1" value="96">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveData()">✓ Salvar</button>
+      <button class="btn" onclick="toggleEdit()">✕ Cancelar</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="card">
+    <p class="section-title">Evolução mensal — performance vs meta</p>
+    <div class="legend">
+      <span><span class="dot" style="background:#1D9E75"></span>Performance 2025</span>
+      <span><span class="dot" style="background:#E24B4A"></span>Performance 2026</span>
+      <span><span class="dash"></span>Meta</span>
+    </div>
+    <div class="chart-wrap" style="height:260px">
+      <canvas id="lineChart" role="img" aria-label="Evolução mensal de performance 2025 e 2026 vs meta"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="section-title">Desvio mensal 2026 vs 2025 (p.p.)</p>
+    <div class="chart-wrap" style="height:160px">
+      <canvas id="barChart" role="img" aria-label="Desvio mensal em pontos percentuais de 2026 em relação a 2025"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="overflow-x: auto;">
+    <p class="section-title" style="margin-bottom:16px">Detalhamento mensal</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Mês</th>
+          <th class="num" style="color:#1D9E75;">2025</th>
+          <th class="num" style="color:#E24B4A;">2026</th>
+          <th class="num">Meta</th>
+          <th class="num">Gap meta</th>
+          <th class="num">Δ vs 2025</th>
+          <th class="num" style="text-align: center; width: 100px;">Status</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+      <tfoot id="tableFoot"></tfoot>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const STORAGE_KEY = 'blt_perf_v2';
+
+const DEFAULT = {
+  meta: 96,
+  y2025: [99.3,98.2,93.6,97.8,99.2,null,null,null,null,null,null,null],
+  y2026: [93.7,95.3,88.5,90.6,90.2,null,null,null,null,null,null,null],
+  updated: null
+};
+
+let state = JSON.parse(JSON.stringify(DEFAULT));
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = JSON.parse(raw);
+  } catch(e) {}
+  render();
+}
+
+function saveData() {
+  state.meta = parseFloat(document.getElementById('inputMeta').value) || state.meta;
+  for (let i = 0; i < 12; i++) {
+    const v25 = document.getElementById('m25_'+i).value;
+    const v26 = document.getElementById('m26_'+i).value;
+    state.y2025[i] = v25 !== '' ? parseFloat(v25) : null;
+    state.y2026[i] = v26 !== '' ? parseFloat(v26) : null;
+  }
+  state.updated = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  toggleEdit();
+  render();
+}
+
+function toggleEdit() {
+  const p = document.getElementById('editPanel');
+  const open = p.style.display === 'none' || p.style.display === '';
+  if (open) buildInputs();
+  p.style.display = open ? 'block' : 'none';
+}
+
+function buildInputs() {
+  ['inputs2025','inputs2026'].forEach((id, yi) => {
+    const cont = document.getElementById(id);
+    cont.innerHTML = '';
+    for (let i = 0; i < 12; i++) {
+      const val = yi === 0 ? state.y2025[i] : state.y2026[i];
+      const sid = yi === 0 ? 'm25_'+i : 'm26_'+i;
+      cont.innerHTML += `<div class="field"><label>${MESES[i]}</label><input id="${sid}" type="number" step="0.01" placeholder="—" value="${val !== null ? val : ''}"></div>`;
+    }
+    document.getElementById('inputMeta').value = state.meta;
+  });
+}
+
+function avg(arr) {
+  const v = arr.filter(x => x !== null && x !== undefined);
+  return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
+}
+
+const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+const textClr = isDark ? '#ced4da' : '#495057';
+const gridClr = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+
+let lChart, bChart;
+
+// Função auxiliar para formatar no padrão PT-BR
+function formatBR(val, append = '') {
+  if(val === null || val === undefined) return '—';
+  return val.toFixed(2).replace('.', ',') + append;
+}
+
+function render() {
+  document.getElementById('lastUpdate').textContent =
+    state.updated ? 'Atualizado em ' + state.updated : 'Dados de referência Jan–Mai 2025/2026';
+
+  const avg25 = avg(state.y2025);
+  const avg26 = avg(state.y2026);
+  const gapMeta = avg26 !== null ? avg26 - state.meta : null;
+  const delta = avg25 !== null && avg26 !== null ? avg26 - avg25 : null;
+
+  const kpis = [
+    { label:'Média 2026', val: avg26 !== null ? formatBR(avg26, '%') : '—', color: avg26 !== null && avg26 < state.meta ? '#E24B4A' : '#1D9E75' },
+    { label:'Média 2025', val: avg25 !== null ? formatBR(avg25, '%') : '—', color:'#1D9E75' },
+    { label:'Meta',       val: state.meta.toString().replace('.', ',') + '%', color:'var(--text)' },
+    { label:'Gap vs meta', val: gapMeta !== null ? (gapMeta>0?'+':'') + formatBR(gapMeta, ' p.p.') : '—', color: gapMeta !== null && gapMeta < 0 ? '#E24B4A' : '#1D9E75' },
+    { label:'Δ vs 2025',  val: delta !== null ? (delta>0?'+':'') + formatBR(delta, ' p.p.') : '—', color: delta !== null && delta < 0 ? '#E24B4A' : '#1D9E75' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-val" style="color:${k.color}">${k.val}</div></div>`
+  ).join('');
+
+  const labels = MESES.filter((_,i) => state.y2025[i] !== null || state.y2026[i] !== null);
+  const d25    = state.y2025.filter(v => v !== null);
+  const d26    = state.y2026.filter(v => v !== null);
+  const metaL  = labels.map(() => state.meta);
+  const dLabels = MESES.filter((_,i) => state.y2025[i] !== null && state.y2026[i] !== null);
+  const deltas  = dLabels.map((_,j) => {
+    const idx = MESES.indexOf(dLabels[j]);
+    return parseFloat((state.y2026[idx] - state.y2025[idx]).toFixed(2));
+  });
+
+  if (lChart) lChart.destroy();
+  lChart = new Chart(document.getElementById('lineChart'), {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'2025',data:d25,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.07)',pointBackgroundColor:'#1D9E75',pointRadius:4,borderWidth:2.5,fill:false,tension:.25},
+        {label:'2026',data:d26,borderColor:'#E24B4A',backgroundColor:'rgba(226,75,74,0.07)',pointBackgroundColor:'#E24B4A',pointRadius:4,borderWidth:2.5,fill:false,tension:.25},
+        {label:'Meta',data:metaL,borderColor:'#888780',borderDash:[6,4],pointRadius:0,borderWidth:1.5,fill:false}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) label += ': ';
+              if (context.parsed.y !== null) label += context.parsed.y.toFixed(2).replace('.', ',') + '%';
+              return label;
+            }
+          }
+        }
+      },
+      scales:{
+        y:{
+          min:82,max:102,
+          ticks:{
+            color:textClr,
+            font:{size:11},
+            callback: function(value) { return value.toString().replace('.', ',') + '%'; }
+          },
+          grid:{color:gridClr}
+        },
+        x:{ticks:{color:textClr,font:{size:11},autoSkip:false,maxRotation:0},grid:{color:gridClr}}
+      }
+    }
+  });
+
+  if (bChart) bChart.destroy();
+  bChart = new Chart(document.getElementById('barChart'), {
+    type:'bar',
+    data:{
+      labels:dLabels,
+      datasets:[{label:'Δ p.p.',data:deltas,backgroundColor:deltas.map(d=>d<0?'rgba(226,75,74,0.8)':'rgba(29,158,117,0.8)'),borderRadius:4,borderSkipped:false}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            label: function(context) {
+              return (context.parsed.y > 0 ? '+' : '') + context.parsed.y.toFixed(2).replace('.', ',') + ' p.p.';
+            }
+          }
+        }
+      },
+      scales:{
+        y:{
+          ticks:{
+            color:textClr,
+            font:{size:11},
+            callback: function(value) { return (value > 0 ? '+' : '') + value.toString().replace('.', ','); }
+          },
+          grid:{color:gridClr}
+        },
+        x:{ticks:{color:textClr,font:{size:11},autoSkip:false,maxRotation:0},grid:{color:gridClr}}
+      }
+    }
+  });
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < 12; i++) {
+    const v25 = state.y2025[i], v26 = state.y2026[i];
+    if (v25 === null && v26 === null) continue;
+    const gap = v26 !== null ? v26 - state.meta : null;
+    const dlt = v25 !== null && v26 !== null ? v26 - v25 : null;
+    const badge = v26 === null ? '' :
+      v26 >= state.meta ? '<span class="badge badge-ok">Atingiu</span>' :
+      v26 >= state.meta - 2 ? '<span class="badge badge-warn">Próximo</span>' :
+      '<span class="badge badge-nok">Abaixo</span>';
+    tbody.innerHTML += `<tr>
+      <td>${MESES_FULL[i]}</td>
+      <td class="num" style="color:#1D9E75; font-weight: 500;">${formatBR(v25, '%')}</td>
+      <td class="num" style="color:#E24B4A; font-weight: 500;">${formatBR(v26, '%')}</td>
+      <td class="num" style="color:var(--text2)">${state.meta.toString().replace('.', ',')}%</td>
+      <td class="num" style="color:${gap!==null&&gap<0?'#E24B4A':'#1D9E75'}">${gap!==null?(gap>0?'+':'')+formatBR(gap, ' p.p.'):'—'}</td>
+      <td class="num" style="color:${dlt!==null&&dlt<0?'#E24B4A':'#1D9E75'}">${dlt!==null?(dlt>0?'+':'')+formatBR(dlt, ' p.p.'):'—'}</td>
+      <td style="text-align: center;">${badge}</td>
+    </tr>`;
+  }
+
+  document.getElementById('tableFoot').innerHTML = `<tr>
+    <td>Média acumulada</td>
+    <td class="num" style="color:#1D9E75">${formatBR(avg25, '%')}</td>
+    <td class="num" style="color:#E24B4A">${formatBR(avg26, '%')}</td>
+    <td class="num" style="color:var(--text2)">${state.meta.toString().replace('.', ',')}%</td>
+    <td class="num" style="color:${gapMeta!==null&&gapMeta<0?'#E24B4A':'#1D9E75'}">${gapMeta!==null?(gapMeta>0?'+':'')+formatBR(gapMeta, ' p.p.'):'—'}</td>
+    <td class="num" style="color:${delta!==null&&delta<0?'#E24B4A':'#1D9E75'}">${delta!==null?(delta>0?'+':'')+formatBR(delta, ' p.p.'):'—'}</td>
+    <td></td>
+  </tr>`;
+}
+
+loadData();
+</script>
+</body>
+</html>
